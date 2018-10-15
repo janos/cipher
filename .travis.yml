@@ -1,0 +1,13 @@
+language: go
+
+go:
+  - 1.11.1
+
+install:
+  - go get -v resenje.org/cipher/...
+
+before_script:
+  - go vet -v resenje.org/cipher/...
+
+script:
+  - go test -v -race resenje.org/cipher/...
