@@ -12,7 +12,7 @@ import (
 
 func TestEncryptDecrypt(t *testing.T) {
 	keyLen := 16
-	key := make([]byte, 16)
+	key := make([]byte, keyLen)
 	n, err := rand.Read(key)
 	if err != nil {
 		t.Errorf("rand.Read: %s", err)

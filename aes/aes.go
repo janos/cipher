@@ -29,9 +29,19 @@ type Cipher struct {
 }
 
 // New returns a new Cipher instance with a given key.
+// The key argument should be the AES key, either 16, 24, or 32 bytes
+// to select AES-128, AES-192, or AES-256.
 func New(key []byte) (c Cipher) {
+	l := len(key)
+	if l > 32 {
+		l = 32
+	} else if l > 24 {
+		l = 24
+	} else if l > 16 {
+		l = 16
+	}
 	return Cipher{
-		key: key,
+		key: key[:l],
 	}
 }
 
