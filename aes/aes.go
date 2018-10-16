@@ -11,10 +11,11 @@ import (
 	"crypto/rand"
 	"encoding/base32"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"hash/adler32"
 	"io"
+
+	rcipher "resenje.org/cipher"
 )
 
 // Encoding is a Base32 encoding with "0123456789abcdefghjkmnpqrstvwxyz"
@@ -71,7 +72,7 @@ func (c Cipher) DecryptString(input string) (output string, err error) {
 	}
 
 	if len(ciphertext) < aes.BlockSize {
-		return "", errors.New("ciphertext too short")
+		return "", rcipher.ErrInvalidData
 	}
 	iv := ciphertext[:aes.BlockSize]
 	ciphertext = ciphertext[aes.BlockSize:]
@@ -80,7 +81,7 @@ func (c Cipher) DecryptString(input string) (output string, err error) {
 
 	o := ciphertext[:len(ciphertext)-adler32.Size]
 	if binary.BigEndian.Uint32(ciphertext[len(ciphertext)-adler32.Size:]) != adler32.Checksum(o) {
-		return "", errors.New("invalid checksum")
+		return "", rcipher.ErrInvalidData
 	}
 	return string(o), nil
 }

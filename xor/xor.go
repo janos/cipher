@@ -8,8 +8,9 @@ package xor
 import (
 	"encoding/base32"
 	"encoding/binary"
-	"errors"
 	"hash/adler32"
+
+	"resenje.org/cipher"
 )
 
 // Encoding is a Base32 encoding with "0123456789abcdefghjkmnpqrstvwxyz"
@@ -47,7 +48,7 @@ func (c Cipher) DecryptString(input string) (output string, err error) {
 	dec := xor(b, c.key)
 	output = string(dec[:len(dec)-adler32.Size])
 	if binary.BigEndian.Uint32(dec[len(dec)-adler32.Size:]) != adler32.Checksum([]byte(output)) {
-		return "", errors.New("invalid checksum")
+		return "", cipher.ErrInvalidData
 	}
 	return output, nil
 }

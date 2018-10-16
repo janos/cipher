@@ -5,6 +5,8 @@
 
 package cipher
 
+import "errors"
+
 // StringCipher defines methods that need to be defined
 // to have a convenient way to encrypt and decrypt
 // arbitrary strings.
@@ -12,3 +14,7 @@ type StringCipher interface {
 	EncryptString(string) (string, error)
 	DecryptString(string) (string, error)
 }
+
+// ErrInvalidData should be returned by DecryptString
+// if the data validation fails.
+var ErrInvalidData = errors.New("invalid data")
