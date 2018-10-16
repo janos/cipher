@@ -5,7 +5,15 @@
 
 package cipher
 
-import "errors"
+import (
+	"encoding/base32"
+	"errors"
+)
+
+// DefaultEncoding is a Base32 encoding with "0123456789abcdefghjkmnpqrstvwxyz"
+// charset and without padding. It is used to encode data returned by
+// EncryptString.
+var DefaultEncoder StringEncoder = base32.NewEncoding("0123456789abcdefghjkmnpqrstvwxyz").WithPadding(base32.NoPadding)
 
 // StringCipher defines methods that need to be defined
 // to have a convenient way to encrypt and decrypt
@@ -13,6 +21,13 @@ import "errors"
 type StringCipher interface {
 	EncryptString(string) (string, error)
 	DecryptString(string) (string, error)
+}
+
+// StringEncoder is used to specify encoding for input
+// or output data.
+type StringEncoder interface {
+	EncodeToString([]byte) string
+	DecodeString(string) ([]byte, error)
 }
 
 // ErrInvalidData should be returned by DecryptString

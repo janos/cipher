@@ -7,31 +7,49 @@ package aes
 
 import (
 	"crypto/aes"
-	"crypto/cipher"
+	gocipher "crypto/cipher"
 	"crypto/rand"
-	"encoding/base32"
 	"encoding/binary"
 	"fmt"
 	"hash/adler32"
 	"io"
 
-	rcipher "resenje.org/cipher"
+	"resenje.org/cipher"
 )
-
-// Encoding is a Base32 encoding with "0123456789abcdefghjkmnpqrstvwxyz"
-// charset and without padding. It is used to encode data returned by
-// EncryptString.
-var Encoding = base32.NewEncoding("0123456789abcdefghjkmnpqrstvwxyz").WithPadding(base32.NoPadding)
 
 // Cipher defines resenje.org/cipher.StringCipher interface.
 type Cipher struct {
-	key []byte
+	key           []byte
+	inputEncoder  cipher.StringEncoder
+	outputEncoder cipher.StringEncoder
+}
+
+// Option is used to specify optional parameters to the New constructor.
+type Option func(*Cipher)
+
+// WithOutputEncoder sets the EncryptString returned data encoding.
+// By default, resenje.org/cipher.DefaultEncoder is used.
+func WithOutputEncoder(e cipher.StringEncoder) Option {
+	return func(c *Cipher) {
+		c.outputEncoder = e
+	}
+}
+
+// WithInputEncoder sets the EncryptString input data encoding.
+// By default, no input data decoding of input data is performed.
+// If the input data is always with the same encoding,
+// encrypted strings can be reduced in size, buy specifying
+// this option.
+func WithInputEncoder(e cipher.StringEncoder) Option {
+	return func(c *Cipher) {
+		c.inputEncoder = e
+	}
 }
 
 // New returns a new Cipher instance with a given key.
 // The key argument should be the AES key, either 16, 24, or 32 bytes
 // to select AES-128, AES-192, or AES-256.
-func New(key []byte) (c Cipher) {
+func New(key []byte, opts ...Option) (c Cipher) {
 	l := len(key)
 	if l > 32 {
 		l = 32
@@ -40,18 +58,34 @@ func New(key []byte) (c Cipher) {
 	} else if l > 16 {
 		l = 16
 	}
-	return Cipher{
-		key: key[:l],
+	c = Cipher{
+		key:           key[:l],
+		outputEncoder: cipher.DefaultEncoder,
 	}
+	for _, opt := range opts {
+		opt(&c)
+	}
+	return c
 }
 
 // EncryptString encrypts input string using AES encryption and
 // Adler32 checksum for data validation.
 func (c Cipher) EncryptString(input string) (output string, err error) {
-	sum := make([]byte, adler32.Size)
-	binary.BigEndian.PutUint32(sum, adler32.Checksum([]byte(input)))
+	var b []byte
+	if c.inputEncoder != nil {
+		b, err = c.inputEncoder.DecodeString(input)
+		if err != nil {
+			return "", err
+		}
+		input = string(b)
+	} else {
+		b = []byte(input)
+	}
 
-	data := append([]byte(input), sum...)
+	sum := make([]byte, adler32.Size)
+	binary.BigEndian.PutUint32(sum, adler32.Checksum(b))
+
+	data := append(b, sum...)
 
 	block, err := aes.NewCipher(c.key)
 	if err != nil {
@@ -64,14 +98,14 @@ func (c Cipher) EncryptString(input string) (output string, err error) {
 		return "", fmt.Errorf("io read full: %v", err)
 	}
 
-	cipher.NewCFBEncrypter(block, iv).XORKeyStream(ciphertext[aes.BlockSize:], data)
-	return Encoding.EncodeToString(ciphertext), nil
+	gocipher.NewCFBEncrypter(block, iv).XORKeyStream(ciphertext[aes.BlockSize:], data)
+	return c.outputEncoder.EncodeToString(ciphertext), nil
 }
 
 // DecryptString decrypts input string produced by EncryptString.
 // It performs AES encryption and validates Adler32 checksum.
 func (c Cipher) DecryptString(input string) (output string, err error) {
-	ciphertext, err := Encoding.DecodeString(input)
+	ciphertext, err := c.outputEncoder.DecodeString(input)
 	if err != nil {
 		return "", fmt.Errorf("decode: %v", err)
 	}
@@ -82,16 +116,21 @@ func (c Cipher) DecryptString(input string) (output string, err error) {
 	}
 
 	if len(ciphertext) < aes.BlockSize {
-		return "", rcipher.ErrInvalidData
+		return "", cipher.ErrInvalidData
 	}
 	iv := ciphertext[:aes.BlockSize]
 	ciphertext = ciphertext[aes.BlockSize:]
 
-	cipher.NewCFBDecrypter(block, iv).XORKeyStream(ciphertext, ciphertext)
+	gocipher.NewCFBDecrypter(block, iv).XORKeyStream(ciphertext, ciphertext)
 
 	o := ciphertext[:len(ciphertext)-adler32.Size]
 	if binary.BigEndian.Uint32(ciphertext[len(ciphertext)-adler32.Size:]) != adler32.Checksum(o) {
-		return "", rcipher.ErrInvalidData
+		return "", cipher.ErrInvalidData
 	}
-	return string(o), nil
+	if c.inputEncoder != nil {
+		output = c.inputEncoder.EncodeToString(o)
+	} else {
+		output = string(o)
+	}
+	return output, nil
 }
