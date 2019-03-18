@@ -10,9 +10,12 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestEncryptDecrypt(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+
 	for i, tc := range []struct {
 		keyLen    int
 		data      string
