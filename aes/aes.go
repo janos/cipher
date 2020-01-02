@@ -77,7 +77,6 @@ func (c Cipher) EncryptString(input string) (output string, err error) {
 		if err != nil {
 			return "", err
 		}
-		input = string(b)
 	} else {
 		b = []byte(input)
 	}
