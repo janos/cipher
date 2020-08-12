@@ -38,8 +38,7 @@ jobs:
           ${{ runner.OS }}-
 
     - name: Set up GolangCI-Lint
-      run: go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
-      working-directory: ~
+      run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.30.0
 
     - name: GolangCI-Lint
       run: golangci-lint run
