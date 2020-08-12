@@ -78,8 +78,12 @@ func (c Cipher) DecryptString(input string) (output string, err error) {
 		return "", err
 	}
 	dec := xor(b, c.key)
-	output = string(dec[:len(dec)-adler32.Size])
-	if binary.BigEndian.Uint32(dec[len(dec)-adler32.Size:]) != adler32.Checksum([]byte(output)) {
+	div := len(dec) - adler32.Size
+	if div <= 0 {
+		return "", cipher.ErrInvalidData
+	}
+	output = string(dec[:div])
+	if binary.BigEndian.Uint32(dec[div:]) != adler32.Checksum([]byte(output)) {
 		return "", cipher.ErrInvalidData
 	}
 	if c.inputEncoder != nil {
