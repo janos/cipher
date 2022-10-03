@@ -15,6 +15,22 @@ import (
 // EncryptString.
 var DefaultEncoder StringEncoder = base32.NewEncoding("0123456789abcdefghjkmnpqrstvwxyz").WithPadding(base32.NoPadding)
 
+// BytesCipher defines methods that need to be defined
+// to have a convenient way to encrypt and decrypt
+// arbitrary data and strings.
+type Cipher interface {
+	BytesCipher
+	StringCipher
+}
+
+// BytesCipher defines methods that need to be defined
+// to have a convenient way to encrypt and decrypt
+// arbitrary data.
+type BytesCipher interface {
+	Encrypt([]byte) ([]byte, error)
+	Decrypt([]byte) ([]byte, error)
+}
+
 // StringCipher defines methods that need to be defined
 // to have a convenient way to encrypt and decrypt
 // arbitrary strings.

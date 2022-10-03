@@ -17,7 +17,13 @@ import (
 	"resenje.org/cipher"
 )
 
-// Cipher defines resenje.org/cipher.StringCipher interface.
+var (
+	_ cipher.BytesCipher  = (*Cipher)(nil)
+	_ cipher.StringCipher = (*Cipher)(nil)
+)
+
+// Cipher defines resenje.org/cipher.Cipher and resenje.org/cipher.StringCipher
+// interfaces.
 type Cipher struct {
 	key           []byte
 	inputEncoder  cipher.StringEncoder
@@ -81,24 +87,34 @@ func (c Cipher) EncryptString(input string) (output string, err error) {
 		b = []byte(input)
 	}
 
-	sum := make([]byte, adler32.Size)
-	binary.BigEndian.PutUint32(sum, adler32.Checksum(b))
+	ciphertext, err := c.Encrypt(b)
+	if err != nil {
+		return "", err
+	}
+	return c.outputEncoder.EncodeToString(ciphertext), nil
+}
 
-	data := append(b, sum...)
+// Encrypt encrypts input data using AES encryption and
+// Adler32 checksum for data validation.
+func (c Cipher) Encrypt(input []byte) ([]byte, error) {
+	sum := make([]byte, adler32.Size)
+	binary.BigEndian.PutUint32(sum, adler32.Checksum(input))
+
+	data := append(input, sum...)
 
 	block, err := aes.NewCipher(c.key)
 	if err != nil {
-		return "", fmt.Errorf("aes new cipher: %v", err)
+		return nil, fmt.Errorf("aes new cipher: %v", err)
 	}
 
 	ciphertext := make([]byte, aes.BlockSize+len(data))
 	iv := ciphertext[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return "", fmt.Errorf("io read full: %v", err)
+		return nil, fmt.Errorf("io read full: %v", err)
 	}
 
 	gocipher.NewCFBEncrypter(block, iv).XORKeyStream(ciphertext[aes.BlockSize:], data)
-	return c.outputEncoder.EncodeToString(ciphertext), nil
+	return ciphertext, nil
 }
 
 // DecryptString decrypts input string produced by EncryptString.
@@ -109,22 +125,9 @@ func (c Cipher) DecryptString(input string) (output string, err error) {
 		return "", fmt.Errorf("decode: %v", err)
 	}
 
-	block, err := aes.NewCipher(c.key)
+	o, err := c.Decrypt(ciphertext)
 	if err != nil {
-		return "", fmt.Errorf("new cipher: %s", err)
-	}
-
-	if len(ciphertext) < aes.BlockSize {
-		return "", cipher.ErrInvalidData
-	}
-	iv := ciphertext[:aes.BlockSize]
-	ciphertext = ciphertext[aes.BlockSize:]
-
-	gocipher.NewCFBDecrypter(block, iv).XORKeyStream(ciphertext, ciphertext)
-
-	o := ciphertext[:len(ciphertext)-adler32.Size]
-	if binary.BigEndian.Uint32(ciphertext[len(ciphertext)-adler32.Size:]) != adler32.Checksum(o) {
-		return "", cipher.ErrInvalidData
+		return "", err
 	}
 	if c.inputEncoder != nil {
 		output = c.inputEncoder.EncodeToString(o)
@@ -132,4 +135,27 @@ func (c Cipher) DecryptString(input string) (output string, err error) {
 		output = string(o)
 	}
 	return output, nil
+}
+
+// Decrypt decrypts input data produced by Encrypt.
+// It performs AES encryption and validates Adler32 checksum.
+func (c Cipher) Decrypt(input []byte) ([]byte, error) {
+	block, err := aes.NewCipher(c.key)
+	if err != nil {
+		return nil, fmt.Errorf("new cipher: %s", err)
+	}
+
+	if len(input) < aes.BlockSize {
+		return nil, cipher.ErrInvalidData
+	}
+	iv := input[:aes.BlockSize]
+	ciphertext := input[aes.BlockSize:]
+
+	gocipher.NewCFBDecrypter(block, iv).XORKeyStream(ciphertext, ciphertext)
+
+	o := ciphertext[:len(ciphertext)-adler32.Size]
+	if binary.BigEndian.Uint32(ciphertext[len(ciphertext)-adler32.Size:]) != adler32.Checksum(o) {
+		return nil, cipher.ErrInvalidData
+	}
+	return o, nil
 }
